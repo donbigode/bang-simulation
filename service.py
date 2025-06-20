@@ -17,7 +17,7 @@ def simulate_route():
         return jsonify({'error': 'Invalid players parameter'}), 400
     chars = request.args.get('characters')
     characters = [c.strip() for c in chars.split(',')] if chars else None
-    winner, players_data, log = simulate_game(players, characters, return_log=True)
+    winner, players_data, log = simulate_game(players, characters, return_log=True, game_number=1)
     return jsonify({'winner': winner, 'players': players_data, 'log': log})
 
 @app.route('/probability-matrix')
