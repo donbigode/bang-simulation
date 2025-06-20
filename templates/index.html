@@ -20,12 +20,15 @@
     <label>Número de jogadores:
         <input type="number" id="players" min="3" max="7" value="4" required>
     </label>
-    <label>Personagens (selecione um ou mais):
-        <select id="characters" multiple>
+    <label>Personagens (selecione exatamente o número de jogadores):
+        <div id="characters" style="display: flex; flex-wrap: wrap; max-width: 220px;">
             {% for char in characters %}
-            <option value="{{ char }}">{{ char }}</option>
+            <div style="width: 50%;">
+                <input type="checkbox" id="char-{{ loop.index }}" value="{{ char }}">
+                <label for="char-{{ loop.index }}">{{ char }}</label>
+            </div>
             {% endfor %}
-        </select>
+        </div>
     </label>
     <button type="submit">Simular</button>
 </form>
@@ -79,17 +82,26 @@
 
     document.getElementById('simulate-form').addEventListener('submit', async function(e) {
         e.preventDefault();
-        const players = document.getElementById('players').value;
-        const selected = Array.from(document.getElementById('characters').selectedOptions)
-            .map(o => o.value).join(',');
+        const players = parseInt(document.getElementById('players').value, 10);
+        const checkboxes = document.querySelectorAll('#characters input[type=checkbox]:checked');
+        if (checkboxes.length > 0 && checkboxes.length !== players) {
+            alert('Selecione exatamente ' + players + ' personagens');
+            return;
+        }
+        const selected = Array.from(checkboxes).map(c => c.value).join(',');
+        document.getElementById('log-table').innerHTML = '';
+        document.getElementById('matrix-table').innerHTML = '';
+        document.getElementById('details-table').innerHTML = '';
+        document.getElementById('role-table').innerHTML = '';
+
         const query = new URLSearchParams({players});
         if (selected) query.append('characters', selected);
 
-        const simRes = await fetch('/simulate?' + query.toString());
+        const simRes = await fetch('/simulate?' + query.toString(), {cache: 'no-store'});
         const simData = await simRes.json();
         renderLog(simData.log);
 
-        const statsRes = await fetch('/statistics?' + new URLSearchParams({players}).toString());
+        const statsRes = await fetch('/statistics?' + new URLSearchParams({players}).toString(), {cache: 'no-store'});
         const statsData = await statsRes.json();
         renderTable('matrix-table', statsData.probability_matrix);
         renderTable('details-table', statsData.role_character_stats);

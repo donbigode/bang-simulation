@@ -133,7 +133,7 @@ def compute_statistics(players_count=4, games=500):
         "probability_matrix": prob.to_dict(orient="records"),
     }
 
-def simulate_game(players_count=4, characters=None, rounds=500, roles=None, return_log=False):
+def simulate_game(players_count=4, characters=None, rounds=500, roles=None, return_log=False, game_number=1):
     """Simula uma partida e retorna o time vencedor e os jogadores.
 
     Quando ``return_log`` é ``True`` uma lista de eventos da partida é
@@ -188,7 +188,9 @@ def simulate_game(players_count=4, characters=None, rounds=500, roles=None, retu
             if not player["alive"]:
                 continue
             if return_log:
-                log.append(f"Rodada {round_ + 1} - turno de {player['character']}")
+                log.append(
+                    f"Partida {game_number} - Rodada {round_ + 1} - turno de {player['character']}"
+                )
 
             # habilidades no inicio do turno
             CHARACTER_PERKS[player["character"]](player, "turn_start", discard=discard)
@@ -265,7 +267,9 @@ def simulate_game(players_count=4, characters=None, rounds=500, roles=None, retu
                 if not target:
                     continue
                 if return_log:
-                    log.append(f"{player['character']} atacou {target['character']}")
+                    log.append(
+                        f"Partida {game_number} - Rodada {round_ + 1} - {player['character']} atacou {target['character']}"
+                    )
                 player["hand"].remove(use_card)
                 discard.append(use_card)
 
@@ -287,7 +291,7 @@ def simulate_game(players_count=4, characters=None, rounds=500, roles=None, retu
                     target["hp"] -= 1
                     if return_log:
                         log.append(
-                            f"{target['character']} perdeu 1 de vida (hp={target['hp']})"
+                            f"Partida {game_number} - Rodada {round_ + 1} - {target['character']} perdeu 1 de vida (hp={target['hp']})"
                         )
                     if target["character"] == "Bart Cassidy":
                         CHARACTER_PERKS[target["character"]](target, "damaged", deck=deck, discard=discard)
@@ -296,7 +300,9 @@ def simulate_game(players_count=4, characters=None, rounds=500, roles=None, retu
                     if target["hp"] <= 0:
                         target["alive"] = False
                         if return_log:
-                            log.append(f"{target['character']} morreu")
+                            log.append(
+                                f"Partida {game_number} - Rodada {round_ + 1} - {target['character']} morreu"
+                            )
 
             # Limite de cartas
             while len(player["hand"]) > player["hp"]:
@@ -321,12 +327,12 @@ def simulate_game(players_count=4, characters=None, rounds=500, roles=None, retu
 
         if winner:
             if return_log:
-                log.append(f"Vencedor: {winner}")
+                log.append(f"Partida {game_number} - Vencedor: {winner}")
                 return winner, players, log
             return winner, players
 
     if return_log:
-        log.append("Vencedor: Draw")
+        log.append(f"Partida {game_number} - Vencedor: Draw")
         return "Draw", players, log
 
     return "Draw", players
