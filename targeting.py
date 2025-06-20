@@ -22,7 +22,7 @@ def select_target(player, players):
         targets = [t for t in possible_targets if t["role"] not in ["Sheriff", "Deputy"]]
     elif player["role"] == "Renegade":
         outlaw_count = sum(1 for p in players if p["alive"] and p["role"] == "Outlaw")
-        law_count = sum(1 for p in players if p["alive"] and p["role"] == "Sheriff")
+        law_count = sum(1 for p in players if p["alive"] and p["role"] in ["Sheriff", "Deputy"])
 
         if outlaw_count > law_count:
             prefer_role = "Outlaw"
