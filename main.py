@@ -35,11 +35,13 @@ def simulate_game(players_count=4, characters=None, rounds=500):
 
     players = []
     for i in range(players_count):
+        base_hp = 5 if roles[i] == "Sheriff" else 4
         p = {
             "id": i,
             "role": roles[i],
             "character": characters[i],
-            "hp": 5 if roles[i] == "Sheriff" else 4,
+            "hp": base_hp,
+            "max_hp": base_hp,
             "alive": True,
             "hand": [],
             "weapon": "BASIC",
@@ -64,19 +66,41 @@ def simulate_game(players_count=4, characters=None, rounds=500):
             if not player["alive"]:
                 continue
 
+            # habilidades no inicio do turno
+            CHARACTER_PERKS[player["character"]](player, "turn_start", discard=discard)
+
             # Dynamite
             if dynamite_owner == player:
                 if random.random() < DYNAMITE_EXPLOSION_PROB:
-                    player["hp"] -= 3
-                    if player["hp"] <= 0:
-                        player["alive"] = False
+                    for _ in range(3):
+                        player["hp"] -= 1
+                        CHARACTER_PERKS[player["character"]](player, "damaged", deck=deck, discard=discard)
+                        if player["hp"] <= 0:
+                            player["alive"] = False
+                            break
                     dynamite_owner = None
 
             # Compra
-            for _ in range(2):
-                card = draw_card(deck, discard)
-                if card:
-                    player["hand"].append(card)
+            handled = CHARACTER_PERKS[player["character"]](
+                player,
+                "draw_phase",
+                players=players,
+                deck=deck,
+                discard=discard,
+            )
+            draw_cards = 2
+            if handled:
+                if handled == "skip":
+                    draw_cards = 0
+                else:
+                    draw_cards -= 1
+            for _ in range(draw_cards):
+                if player["character"] == "Lucky Duke":
+                    CHARACTER_PERKS[player["character"]](player, "draw", deck=deck, discard=discard)
+                else:
+                    card = draw_card(deck, discard)
+                    if card:
+                        player["hand"].append(card)
 
             # Equipamento
             for card in player["hand"][:]:
@@ -101,25 +125,54 @@ def simulate_game(players_count=4, characters=None, rounds=500):
 
             # Ataques
             shots = 2 if WEAPON_RANGES.get(player["weapon"], {}).get("multi_shot") else 1
+            if player.get("unlimited_bang"):
+                shots = player["hand"].count("BANG")
+                if player.get("can_use_missed_as_bang"):
+                    shots += player["hand"].count("MISSED")
             for _ in range(shots):
-                if "BANG" not in player["hand"]:
+                if "BANG" in player["hand"]:
+                    use_card = "BANG"
+                elif player.get("can_use_missed_as_bang") and "MISSED" in player["hand"]:
+                    use_card = "MISSED"
+                else:
                     break
+
                 target = select_target(player, players)
                 if not target:
                     continue
-                player["hand"].remove("BANG")
-                discard.append("BANG")
-                if "MISSED" in target["hand"]:
-                    target["hand"].remove("MISSED")
-                    discard.append("MISSED")
-                else:
+                player["hand"].remove(use_card)
+                discard.append(use_card)
+
+                misses_needed = 2 if player["character"] == "Slab the Killer" else 1
+                used_misses = 0
+                while used_misses < misses_needed:
+                    if "MISSED" in target["hand"]:
+                        target["hand"].remove("MISSED")
+                        discard.append("MISSED")
+                        used_misses += 1
+                    elif target.get("can_use_bang_as_missed") and "BANG" in target["hand"]:
+                        target["hand"].remove("BANG")
+                        discard.append("BANG")
+                        used_misses += 1
+                    else:
+                        break
+
+                if used_misses < misses_needed:
                     target["hp"] -= 1
+                    if target["character"] == "Bart Cassidy":
+                        CHARACTER_PERKS[target["character"]](target, "damaged", deck=deck, discard=discard)
+                    if target["character"] == "El Gringo":
+                        CHARACTER_PERKS[target["character"]](target, "damaged_by_player", attacker=player)
                     if target["hp"] <= 0:
                         target["alive"] = False
 
             # Limite de cartas
             while len(player["hand"]) > player["hp"]:
                 discard.append(player["hand"].pop())
+
+            CHARACTER_PERKS[player["character"]](
+                player, "turn_end", deck=deck, discard=discard
+            )
 
         # Verificação de vitória
         sheriff_alive = any(p["role"] == "Sheriff" and p["alive"] for p in players)
