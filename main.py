@@ -5,12 +5,28 @@ from targeting import select_target
 
 DYNAMITE_EXPLOSION_PROB = 8 / 52
 
-def simulate_game(players_count=4, rounds=500):
-    assert players_count == 4, "Este script só suporta 4 jogadores por enquanto."
 
-    roles = ["Sheriff", "Outlaw", "Outlaw", "Renegade"]
+def get_roles(players_count):
+    """Return a shuffled list of roles for the game."""
+    if players_count < 3:
+        raise ValueError("O jogo requer no mínimo 3 jogadores.")
+    roles = ["Sheriff"] + ["Outlaw"] * (players_count - 2) + ["Renegade"]
     random.shuffle(roles)
-    characters = random.sample(CHARACTERS, players_count)
+    return roles
+
+def simulate_game(players_count=4, characters=None, rounds=500):
+    """Simula uma partida e retorna o time vencedor e os jogadores."""
+
+    roles = get_roles(players_count)
+
+    if characters is not None:
+        if len(characters) != players_count:
+            raise ValueError("Quantidade de personagens diferente do numero de jogadores.")
+        for c in characters:
+            if c not in CHARACTERS:
+                raise ValueError(f"Personagem invalido: {c}")
+    else:
+        characters = random.sample(CHARACTERS, players_count)
 
     players = []
     for i in range(players_count):
@@ -106,19 +122,58 @@ def simulate_game(players_count=4, rounds=500):
         renegade_alive = any(p["role"] == "Renegade" and p["alive"] for p in players)
 
         if not sheriff_alive and not outlaws_alive and renegade_alive:
-            return "Renegade"
+            return "Renegade", players
         elif sheriff_alive and not outlaws_alive and not renegade_alive:
-            return "Sheriff"
+            return "Sheriff", players
         elif not sheriff_alive and outlaws_alive:
-            return "Outlaws"
+            return "Outlaws", players
 
-    return "Draw"
+    return "Draw", players
 
 if __name__ == "__main__":
-    results = {"Sheriff": 0, "Outlaws": 0, "Renegade": 0, "Draw": 0}
-    for _ in range(5000):
-        res = simulate_game()
-        results[res] += 1
-    df = pd.DataFrame.from_dict(results, orient="index", columns=["Wins"])
-    df["Win Rate (%)"] = df["Wins"] / 50
-    print(df)
+    total_games = 5000
+    players_count = int(input("Numero de jogadores (3-16): "))
+    print("Personagens disponiveis:")
+    print(", ".join(CHARACTERS))
+    chars_input = input(
+        "Digite os personagens separados por virgula ou pressione Enter para aleatorio: "
+    ).strip()
+    if chars_input:
+        selected_characters = [c.strip() for c in chars_input.split(',')]
+    else:
+        selected_characters = None
+
+    results_roles = {"Sheriff": 0, "Outlaws": 0, "Renegade": 0, "Draw": 0}
+    results_details = {}
+
+    for _ in range(total_games):
+        winner, players = simulate_game(players_count, selected_characters)
+        results_roles[winner] += 1
+
+        if winner != "Draw":
+            for p in players:
+                if winner == "Outlaws" and p["role"] != "Outlaw":
+                    continue
+                if winner == "Sheriff" and p["role"] != "Sheriff":
+                    continue
+                if winner == "Renegade" and p["role"] != "Renegade":
+                    continue
+                key = (p["role"], p["character"])
+                results_details[key] = results_details.get(key, 0) + 1
+
+    df_roles = pd.DataFrame.from_dict(results_roles, orient="index", columns=["Wins"])
+    df_roles["Win Rate (%)"] = df_roles["Wins"] / total_games * 100
+
+    details_rows = [
+        {"Role": k[0], "Character": k[1], "Wins": v, "Win Rate (%)": v / total_games * 100}
+        for k, v in results_details.items()
+    ]
+    df_details = pd.DataFrame(details_rows)
+
+    print("\nEstatisticas por funcao:")
+    print(df_roles)
+    print("\nEstatisticas por funcao e personagem:")
+    if not df_details.empty:
+        print(df_details.sort_values(["Role", "Character"]).to_string(index=False))
+    else:
+        print("Nenhum dado disponivel")
