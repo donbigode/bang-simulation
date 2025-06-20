@@ -25,12 +25,15 @@ optionally which characters to use.
 
 ## Running as a microservice
 
-You can expose the simulation through a simple Flask API. Start the
-service with:
+You can expose the simulation through a simple Flask API with a small
+web interface. Start the service with:
 
 ```bash
 python service.py
 ```
+
+After starting, open `http://localhost:5000/` in your browser to use the
+interactive front‑end.
 
 The API exposes two endpoints:
 
