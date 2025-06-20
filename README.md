@@ -20,5 +20,5 @@ Run the simulation using:
 python main.py
 ```
 
-The script will prompt for the number of players and optionally which
-characters to use.
+The script will prompt for the number of players (3 to 7) and
+optionally which characters to use.
