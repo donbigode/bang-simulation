@@ -13,8 +13,10 @@ DYNAMITE_EXPLOSION_PROB = 8 / 52
 
 def get_roles(players_count):
     """Return a shuffled list of roles for the game."""
-    if players_count < 3 or players_count > 7:
-        raise ValueError("O jogo requer entre 3 e 7 jogadores.")
+    if players_count < 3:
+        raise ValueError("O jogo requer no mínimo 3 jogadores.")
+    if players_count > 7:
+        raise ValueError("O jogo suporta no máximo 7 jogadores.")
     roles = ["Sheriff"] + ["Outlaw"] * (players_count - 2) + ["Renegade"]
     random.shuffle(roles)
     return roles
@@ -254,6 +256,8 @@ def simulate_game(players_count=4, characters=None, rounds=500, roles=None):
 if __name__ == "__main__":
     total_games = 5000
     players_count = int(input("Numero de jogadores (3-7): "))
+    if not 3 <= players_count <= 7:
+        raise ValueError("Numero de jogadores deve estar entre 3 e 7.")
     print("Personagens disponiveis:")
     print(", ".join(CHARACTERS))
     chars_input = input(
