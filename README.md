@@ -23,6 +23,14 @@ python main.py
 The script will prompt for the number of players (3 to 7) and
 optionally which characters to use.
 
+By default the simulation uses a random seed generated from the system. To
+reproduce specific results you can set the `BANG_SEED` environment variable
+before running any command:
+
+```bash
+BANG_SEED=123 python main.py
+```
+
 ## Running as a microservice
 
 You can expose the simulation through a simple Flask API with a small
@@ -46,3 +54,13 @@ The API exposes two endpoints:
     character/role pair.
 
 Both endpoints return JSON data suitable for a front‑end.
+
+### Characters in the simulation
+
+The following 14 characters from the base game are currently implemented:
+
+```
+Bart Cassidy, Calamity Janet, Jesse Jones, Lucky Duke, Paul Regret, Sid Ketchum,
+Slab the Killer, Suzy Lafayette, Willy the Kid, El Gringo, Pedro Ramirez,
+Kit Carlson, Rose Doolan, Black Jack
+```
