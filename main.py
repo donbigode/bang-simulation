@@ -82,8 +82,65 @@ def compute_probability_matrix(players_count=4, games_per_combo=50):
     df = pd.DataFrame(matrix_rows)
     return df.sort_values(["Character", "Role"]).reset_index(drop=True)
 
-def simulate_game(players_count=4, characters=None, rounds=500, roles=None):
-    """Simula uma partida e retorna o time vencedor e os jogadores."""
+
+def compute_statistics(players_count=4, games=500):
+    """Executa multiplas partidas para gerar estatisticas agregadas."""
+    import pandas as pd
+
+    results_roles = {"Sheriff": 0, "Outlaws": 0, "Renegade": 0, "Draw": 0}
+    results_details = {}
+
+    for _ in range(games):
+        winner, players = simulate_game(players_count)
+        results_roles[winner] += 1
+
+        if winner != "Draw":
+            for p in players:
+                if winner == "Outlaws" and p["role"] != "Outlaw":
+                    continue
+                if winner == "Sheriff" and p["role"] != "Sheriff":
+                    continue
+                if winner == "Renegade" and p["role"] != "Renegade":
+                    continue
+                key = (p["character"], p["role"])
+                results_details[key] = results_details.get(key, 0) + 1
+
+    df_roles = pd.DataFrame.from_dict(results_roles, orient="index", columns=["Wins"])
+    df_roles["Win Rate (%)"] = df_roles["Wins"] / games * 100
+    df_roles.index.name = "Role"
+    df_roles = df_roles.reset_index()
+
+    details_rows = [
+        {"Character": k[0], "Role": k[1], "Win Rate (%)": v / games * 100}
+        for k, v in results_details.items()
+    ]
+    df_details = pd.DataFrame(details_rows)
+    if not df_details.empty:
+        df_details = (
+            df_details.pivot_table(index="Character", columns="Role", values="Win Rate (%)")
+            .reset_index()
+            .fillna(0)
+        )
+
+    prob = compute_probability_matrix(players_count, games_per_combo=50)
+    prob = prob.pivot_table(index="Character", columns="Role", values=["Win %", "Loss %"])
+    prob.columns = [f"{stat} {role}" for stat, role in prob.columns]
+    prob = prob.reset_index().fillna(0)
+
+    return {
+        "role_stats": df_roles.to_dict(orient="records"),
+        "role_character_stats": df_details.to_dict(orient="records") if not df_details.empty else [],
+        "probability_matrix": prob.to_dict(orient="records"),
+    }
+
+def simulate_game(players_count=4, characters=None, rounds=500, roles=None, return_log=False):
+    """Simula uma partida e retorna o time vencedor e os jogadores.
+
+    Quando ``return_log`` é ``True`` uma lista de eventos da partida é
+    retornada como terceiro elemento da tupla.
+    """
+
+    log = [] if return_log else None
 
     roles = roles if roles is not None else get_roles(players_count)
     if len(roles) != players_count:
@@ -130,6 +187,8 @@ def simulate_game(players_count=4, characters=None, rounds=500, roles=None):
         for player in players:
             if not player["alive"]:
                 continue
+            if return_log:
+                log.append(f"Rodada {round_ + 1} - turno de {player['character']}")
 
             # habilidades no inicio do turno
             CHARACTER_PERKS[player["character"]](player, "turn_start", discard=discard)
@@ -205,6 +264,8 @@ def simulate_game(players_count=4, characters=None, rounds=500, roles=None):
                 target = select_target(player, players)
                 if not target:
                     continue
+                if return_log:
+                    log.append(f"{player['character']} atacou {target['character']}")
                 player["hand"].remove(use_card)
                 discard.append(use_card)
 
@@ -224,12 +285,18 @@ def simulate_game(players_count=4, characters=None, rounds=500, roles=None):
 
                 if used_misses < misses_needed:
                     target["hp"] -= 1
+                    if return_log:
+                        log.append(
+                            f"{target['character']} perdeu 1 de vida (hp={target['hp']})"
+                        )
                     if target["character"] == "Bart Cassidy":
                         CHARACTER_PERKS[target["character"]](target, "damaged", deck=deck, discard=discard)
                     if target["character"] == "El Gringo":
                         CHARACTER_PERKS[target["character"]](target, "damaged_by_player", attacker=player)
                     if target["hp"] <= 0:
                         target["alive"] = False
+                        if return_log:
+                            log.append(f"{target['character']} morreu")
 
             # Limite de cartas
             while len(player["hand"]) > player["hp"]:
@@ -244,12 +311,23 @@ def simulate_game(players_count=4, characters=None, rounds=500, roles=None):
         outlaws_alive = any(p["role"] == "Outlaw" and p["alive"] for p in players)
         renegade_alive = any(p["role"] == "Renegade" and p["alive"] for p in players)
 
+        winner = None
         if not sheriff_alive and not outlaws_alive and renegade_alive:
-            return "Renegade", players
+            winner = "Renegade"
         elif sheriff_alive and not outlaws_alive and not renegade_alive:
-            return "Sheriff", players
+            winner = "Sheriff"
         elif not sheriff_alive and outlaws_alive:
-            return "Outlaws", players
+            winner = "Outlaws"
+
+        if winner:
+            if return_log:
+                log.append(f"Vencedor: {winner}")
+                return winner, players, log
+            return winner, players
+
+    if return_log:
+        log.append("Vencedor: Draw")
+        return "Draw", players, log
 
     return "Draw", players
 
