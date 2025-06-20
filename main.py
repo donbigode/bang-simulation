@@ -19,10 +19,73 @@ def get_roles(players_count):
     random.shuffle(roles)
     return roles
 
-def simulate_game(players_count=4, characters=None, rounds=500):
+
+def generate_setup(fixed_character, fixed_role, players_count):
+    """Gera personagens e funcoes com um personagem fixo em determinada funcao."""
+    remaining_roles = ["Sheriff"] + ["Outlaw"] * (players_count - 2) + ["Renegade"]
+    remaining_roles.remove(fixed_role)
+    random.shuffle(remaining_roles)
+    roles = [fixed_role] + remaining_roles
+
+    remaining_characters = [c for c in CHARACTERS if c != fixed_character]
+    characters = [fixed_character] + random.sample(remaining_characters, players_count - 1)
+    return characters, roles
+
+
+def compute_probability_matrix(players_count=4, games_per_combo=50):
+    """Executa simulacoes em paralelo para gerar matriz de vitorias e derrotas."""
+    import threading
+
+    outcomes = {
+        (char, role): {"wins": 0, "losses": 0}
+        for char in CHARACTERS
+        for role in ["Sheriff", "Outlaw", "Renegade"]
+    }
+    lock = threading.Lock()
+
+    def worker(character, role):
+        wins = 0
+        for _ in range(games_per_combo):
+            chars, roles = generate_setup(character, role, players_count)
+            result, players = simulate_game(players_count, chars, roles=roles)
+            target_team = role if role != "Outlaw" else "Outlaws"
+            if result == target_team:
+                wins += 1
+        with lock:
+            outcomes[(character, role)]["wins"] += wins
+            outcomes[(character, role)]["losses"] += games_per_combo - wins
+
+    threads = []
+    for character in CHARACTERS:
+        for role in ["Sheriff", "Outlaw", "Renegade"]:
+            t = threading.Thread(target=worker, args=(character, role))
+            t.start()
+            threads.append(t)
+
+    for t in threads:
+        t.join()
+
+    matrix_rows = []
+    for (char, role), data in outcomes.items():
+        total = data["wins"] + data["losses"]
+        win_rate = data["wins"] / total * 100 if total else 0
+        loss_rate = data["losses"] / total * 100 if total else 0
+        matrix_rows.append({
+            "Character": char,
+            "Role": role,
+            "Win %": win_rate,
+            "Loss %": loss_rate,
+        })
+
+    df = pd.DataFrame(matrix_rows)
+    return df.sort_values(["Character", "Role"]).reset_index(drop=True)
+
+def simulate_game(players_count=4, characters=None, rounds=500, roles=None):
     """Simula uma partida e retorna o time vencedor e os jogadores."""
 
-    roles = get_roles(players_count)
+    roles = roles if roles is not None else get_roles(players_count)
+    if len(roles) != players_count:
+        raise ValueError("Numero de funcoes diferente do numero de jogadores.")
 
     if characters is not None:
         if len(characters) != players_count:
@@ -182,3 +245,7 @@ if __name__ == "__main__":
         print(df_details.sort_values(["Role", "Character"]).to_string(index=False))
     else:
         print("Nenhum dado disponivel")
+
+    print("\nMatriz de probabilidades (personagem x funcao):")
+    matrix = compute_probability_matrix(players_count, games_per_combo=50)
+    print(matrix.to_string(index=False))
