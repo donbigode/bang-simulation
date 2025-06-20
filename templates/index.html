@@ -8,7 +8,10 @@
         label { display: block; margin-top: 1em; }
         select { width: 200px; height: 150px; }
         button { margin-top: 1em; padding: 0.5em 1em; }
-        pre { background: #f0f0f0; padding: 1em; }
+        table { border-collapse: collapse; margin-bottom: 1em; }
+        th, td { border: 1px solid #ccc; padding: 0.25em 0.5em; text-align: center; }
+        #layout { display: flex; gap: 2em; margin-top: 2em; }
+        #log-container { max-height: 400px; overflow-y: auto; }
     </style>
 </head>
 <body>
@@ -26,18 +29,71 @@
     </label>
     <button type="submit">Simular</button>
 </form>
-<pre id="result"></pre>
+<div id="layout">
+    <div id="tables">
+        <h3>Matriz de Probabilidades</h3>
+        <table id="matrix-table"></table>
+        <h3>Estatísticas por Função e Personagem</h3>
+        <table id="details-table"></table>
+        <h3>Estatísticas por Função</h3>
+        <table id="role-table"></table>
+    </div>
+    <div id="log-container">
+        <h3>Log de Ações</h3>
+        <table id="log-table"></table>
+    </div>
+</div>
+
 <script>
+    async function renderTable(id, data) {
+        const table = document.getElementById(id);
+        table.innerHTML = '';
+        if (!data || !data.length) return;
+        const cols = Object.keys(data[0]);
+        const thead = document.createElement('thead');
+        const headRow = document.createElement('tr');
+        cols.forEach(c => { const th = document.createElement('th'); th.textContent = c; headRow.appendChild(th); });
+        thead.appendChild(headRow);
+        const tbody = document.createElement('tbody');
+        data.forEach(row => {
+            const tr = document.createElement('tr');
+            cols.forEach(c => { const td = document.createElement('td'); td.textContent = row[c]; tr.appendChild(td); });
+            tbody.appendChild(tr);
+        });
+        table.appendChild(thead);
+        table.appendChild(tbody);
+    }
+
+    function renderLog(log) {
+        const table = document.getElementById('log-table');
+        table.innerHTML = '';
+        if (!log) return;
+        log.forEach(entry => {
+            const tr = document.createElement('tr');
+            const td = document.createElement('td');
+            td.textContent = entry;
+            tr.appendChild(td);
+            table.appendChild(tr);
+        });
+    }
+
     document.getElementById('simulate-form').addEventListener('submit', async function(e) {
         e.preventDefault();
         const players = document.getElementById('players').value;
         const selected = Array.from(document.getElementById('characters').selectedOptions)
             .map(o => o.value).join(',');
-        const query = new URLSearchParams({players: players});
+        const query = new URLSearchParams({players});
         if (selected) query.append('characters', selected);
-        const response = await fetch('/simulate?' + query.toString());
-        const data = await response.json();
-        document.getElementById('result').textContent = JSON.stringify(data, null, 2);
+
+        const simRes = await fetch('/simulate?' + query.toString());
+        const simData = await simRes.json();
+        renderLog(simData.log);
+
+        const statsRes = await fetch('/statistics?' + new URLSearchParams({players}).toString());
+        const statsData = await statsRes.json();
+        renderTable('matrix-table', statsData.probability_matrix);
+        renderTable('details-table', statsData.role_character_stats);
+        renderTable('role-table', statsData.role_stats);
     });
 </script>
 </body>

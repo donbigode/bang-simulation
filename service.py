@@ -1,5 +1,5 @@
 from flask import Flask, request, jsonify, render_template
-from main import simulate_game, compute_probability_matrix
+from main import simulate_game, compute_probability_matrix, compute_statistics
 from utils import CHARACTERS
 
 app = Flask(__name__)
@@ -17,8 +17,8 @@ def simulate_route():
         return jsonify({'error': 'Invalid players parameter'}), 400
     chars = request.args.get('characters')
     characters = [c.strip() for c in chars.split(',')] if chars else None
-    winner, players_data = simulate_game(players, characters)
-    return jsonify({'winner': winner, 'players': players_data})
+    winner, players_data, log = simulate_game(players, characters, return_log=True)
+    return jsonify({'winner': winner, 'players': players_data, 'log': log})
 
 @app.route('/probability-matrix')
 def matrix_route():
@@ -29,6 +29,16 @@ def matrix_route():
         return jsonify({'error': 'Invalid query parameters'}), 400
     df = compute_probability_matrix(players_count=players, games_per_combo=games)
     return jsonify(df.to_dict(orient='records'))
+
+@app.route('/statistics')
+def statistics_route():
+    try:
+        players = int(request.args.get('players', 4))
+        games = int(request.args.get('games', 500))
+    except ValueError:
+        return jsonify({'error': 'Invalid query parameters'}), 400
+    data = compute_statistics(players_count=players, games=games)
+    return jsonify(data)
 
 if __name__ == '__main__':
     app.run(debug=True)
