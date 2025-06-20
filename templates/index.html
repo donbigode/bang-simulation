@@ -4,21 +4,32 @@
     <meta charset="UTF-8">
     <title>Bang! Simulação</title>
     <link href="https://fonts.googleapis.com/css2?family=Rye&display=swap" rel="stylesheet">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
         body {
             font-family: 'Rye', serif;
-            margin: 2em;
+            margin: 1em;
             background-color: #f5f5dc; /* cor bege para lembrar o velho oeste */
+            max-width: 1200px;
+            margin-left: auto;
+            margin-right: auto;
         }
         label { display: block; margin-top: 1em; }
         select { width: 100%; height: 150px; }
         button { margin-top: 1em; padding: 0.5em 1em; }
         table { border-collapse: collapse; margin-bottom: 1em; }
         th, td { border: 1px solid #ccc; padding: 0.25em 0.5em; text-align: center; }
-        #layout { display: flex; gap: 2em; margin-top: 2em; }
+        #layout { display: flex; gap: 2em; margin-top: 2em; flex-direction: column; }
         #log-container { max-height: 400px; overflow-y: auto; width: 100%; }
         #log-table td { text-align: left; }
         canvas { max-width: 100%; }
+        #characters { display: flex; flex-wrap: nowrap; overflow-x: auto; gap: 1em; }
+        .char-option { flex: 0 0 auto; width: 200px; }
+        .char-option label { display: flex; flex-direction: column; }
+        .char-option .ability { font-size: 0.7em; }
+        @media(min-width: 700px) {
+            #layout { flex-direction: row; }
+        }
     </style>
 </head>
 <body>
@@ -27,16 +38,18 @@
     <label>Número de jogadores:
         <input type="number" id="players" min="3" max="7" value="4" required>
     </label>
-    <label>Personagens (selecione exatamente o número de jogadores):
-        <div id="characters" style="display: flex; flex-wrap: wrap; max-width: 220px;">
-            {% for char in characters %}
-            <div style="width: 50%;">
-                <input type="checkbox" id="char-{{ loop.index }}" value="{{ char }}">
-                <label for="char-{{ loop.index }}">{{ char }}</label>
-            </div>
-            {% endfor %}
+    <label>Personagens (selecione exatamente o número de jogadores):</label>
+    <div id="characters">
+        {% for char in characters %}
+        <div class="char-option">
+            <input type="checkbox" id="char-{{ loop.index }}" value="{{ char }}">
+            <label for="char-{{ loop.index }}">
+                <span class="char-name">{{ char }}</span>
+                <span class="ability">{{ abilities[char] }}</span>
+            </label>
         </div>
-    </label>
+        {% endfor %}
+    </div>
     <button type="submit">Simular</button>
 </form>
 <div id="layout">
@@ -47,6 +60,8 @@
         <table id="details-table"></table>
         <h3>Estatísticas por Função</h3>
         <table id="role-table"></table>
+        <h3>Equilíbrio de Nash</h3>
+        <table id="eq-table"></table>
     </div>
     <div id="log-container">
         <h3>Log de Ações</h3>
@@ -150,6 +165,7 @@
         document.getElementById('matrix-table').innerHTML = '';
         document.getElementById('details-table').innerHTML = '';
         document.getElementById('role-table').innerHTML = '';
+        document.getElementById('eq-table').innerHTML = '';
 
         const query = new URLSearchParams({players});
         if (selected) query.append('characters', selected);
@@ -160,6 +176,7 @@
         renderTable('matrix-table', statsData.probability_matrix);
         renderTable('details-table', statsData.role_character_stats);
         renderTable('role-table', statsData.role_stats);
+        renderTable('eq-table', statsData.nash_equilibria);
         renderChart(statsData.game_results);
     });
 </script>

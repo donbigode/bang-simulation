@@ -96,6 +96,7 @@ def compute_statistics(players_count=4, games=500):
     results_details = {}
     logs = []
     game_results = []
+    nash_list = []
 
     for i in range(games):
         winner, players, log = simulate_game(
@@ -113,10 +114,17 @@ def compute_statistics(players_count=4, games=500):
                 or (winner == "Renegade" and p["role"] == "Renegade")
             )
         ]
+        eq_round = next((e["round"] for e in log if e.get("action") == "nash_equilibrium"), None)
+        break_round = next((e["round"] for e in log if e.get("action") == "nash_equilibrium_broken"), None)
         game_results.append({
             "game": i + 1,
             "winner_role": winner,
             "winner_characters": winners_chars,
+        })
+        nash_list.append({
+            "game": i + 1,
+            "equilibrium_round": eq_round,
+            "break_round": break_round,
         })
 
         if winner != "Draw":
@@ -158,6 +166,7 @@ def compute_statistics(players_count=4, games=500):
         "probability_matrix": prob.to_dict(orient="records"),
         "log": logs,
         "game_results": game_results,
+        "nash_equilibria": nash_list,
     }
 
 def simulate_game(players_count=4, characters=None, rounds=500, roles=None, return_log=False, game_number=1):
@@ -213,6 +222,10 @@ def simulate_game(players_count=4, characters=None, rounds=500, roles=None, retu
     discard = []
     dynamite_owner = None
 
+    equilibrium_round = None
+    equilibrium_broken_round = None
+    in_equilibrium = False
+
     for p in players:
         for _ in range(2):
             card = draw_card(deck, discard)
@@ -220,6 +233,22 @@ def simulate_game(players_count=4, characters=None, rounds=500, roles=None, retu
                 p["hand"].append(card)
 
     for round_ in range(rounds):
+        outlaws_alive_cnt = sum(1 for p in players if p["alive"] and p["role"] == "Outlaw")
+        law_alive_cnt = sum(1 for p in players if p["alive"] and p["role"] == "Sheriff")
+
+        if outlaws_alive_cnt == law_alive_cnt:
+            if not in_equilibrium:
+                in_equilibrium = True
+                equilibrium_round = round_ + 1
+                if return_log:
+                    log.append({"game": game_number, "round": round_ + 1, "action": "nash_equilibrium"})
+        else:
+            if in_equilibrium:
+                in_equilibrium = False
+                equilibrium_broken_round = round_ + 1
+                if return_log:
+                    log.append({"game": game_number, "round": round_ + 1, "action": "nash_equilibrium_broken"})
+
         for player in players:
             if not player["alive"]:
                 continue

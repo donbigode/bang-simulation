@@ -176,6 +176,11 @@ CHARACTER_PERKS = {
     "Black Jack": black_jack,
 }
 
+CHARACTER_ABILITY_DESCRIPTIONS = {
+    name: func.__doc__.strip() if func.__doc__ else ""
+    for name, func in CHARACTER_PERKS.items()
+}
+
 CHARACTERS = list(CHARACTER_PERKS.keys())
 
 def build_deck():
