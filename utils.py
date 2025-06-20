@@ -126,7 +126,8 @@ def kit_carlson(player, event, deck=None, **_):
     """Looks at the top three cards and chooses two."""
     if event == "draw_phase" and deck is not None:
         cards = [draw_card(deck, []) for _ in range(3)]
-        keep = random.sample([c for c in cards if c], k=min(2, len(cards)))
+        available = [c for c in cards if c]
+        keep = random.sample(available, k=min(2, len(available)))
         for card in keep:
             player["hand"].append(card)
         for card in cards:
