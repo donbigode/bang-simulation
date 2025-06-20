@@ -26,21 +26,153 @@ WEAPON_RANGES = {
     "WINCHESTER": {"range": 5, "multi_shot": False},
 }
 
+# ---------------------------------------------------------------------------
+# Character abilities
+# ---------------------------------------------------------------------------
+def bart_cassidy(player, event, deck=None, discard=None, **_):
+    """Draw a card every time he loses a life point."""
+    if event == "damaged" and deck is not None:
+        card = draw_card(deck, discard)
+        if card:
+            player["hand"].append(card)
+
+
+def calamity_janet(player, event, **_):
+    """BANG! and MISSED! cards are interchangeable."""
+    if event == "start":
+        player.update({"can_use_missed_as_bang": True, "can_use_bang_as_missed": True})
+
+
+def jesse_jones(player, event, players=None, deck=None, discard=None, **_):
+    """First draw can steal a random card from another player's hand."""
+    if event == "draw_phase" and players is not None:
+        others = [p for p in players if p["id"] != player["id"] and p["alive"] and p["hand"]]
+        if others:
+            target = random.choice(others)
+            card = random.choice(target["hand"])
+            target["hand"].remove(card)
+            player["hand"].append(card)
+            return True  # card taken
+    return False
+
+
+def lucky_duke(player, event, deck=None, discard=None, **_):
+    """Draw two cards and choose one for each draw."""
+    if event == "draw" and deck is not None:
+        card1 = draw_card(deck, discard)
+        card2 = draw_card(deck, discard)
+        chosen = card1 if card2 is None else random.choice([card1, card2])
+        extra = card2 if chosen is card1 else card1
+        if chosen:
+            player["hand"].append(chosen)
+        if extra:
+            discard.append(extra)
+        return True
+    return False
+
+
+def paul_regret(player, event, **_):
+    """Other players have -1 range when targeting him."""
+    if event == "start":
+        player["dodge_bonus"] = player.get("dodge_bonus", 0) + 1
+
+
+def sid_ketchum(player, event, discard=None, **_):
+    """May discard two cards at start of turn to regain 1 life."""
+    if event == "turn_start" and discard is not None:
+        while player["hp"] < player["max_hp"] and len(player["hand"]) >= 2:
+            discard.append(player["hand"].pop())
+            discard.append(player["hand"].pop())
+            player["hp"] += 1
+
+
+def slab_the_killer(player, event, **_):
+    """Targets need two MISSED! cards to cancel his BANG!"""
+    # handled in main during attack
+    return None
+
+
+def suzy_lafayette(player, event, deck=None, discard=None, **_):
+    """Draw a card if she ends her turn with no cards in hand."""
+    if event == "turn_end" and deck is not None and not player["hand"]:
+        card = draw_card(deck, discard)
+        if card:
+            player["hand"].append(card)
+
+
+def willy_the_kid(player, event, **_):
+    """May play any number of BANG! cards."""
+    if event == "start":
+        player["unlimited_bang"] = True
+
+
+def el_gringo(player, event, attacker=None, **_):
+    """When hit by a player, steals a random card from the attacker."""
+    if event == "damaged_by_player" and attacker and attacker["hand"]:
+        card = random.choice(attacker["hand"])
+        attacker["hand"].remove(card)
+        player["hand"].append(card)
+
+
+def pedro_ramirez(player, event, discard=None, **_):
+    """May draw the first card from discard instead of deck."""
+    if event == "draw_phase" and discard:
+        player["hand"].append(discard.pop())
+        return True
+    return False
+
+
+def kit_carlson(player, event, deck=None, **_):
+    """Looks at the top three cards and chooses two."""
+    if event == "draw_phase" and deck is not None:
+        cards = [draw_card(deck, []) for _ in range(3)]
+        keep = random.sample([c for c in cards if c], k=min(2, len(cards)))
+        for card in keep:
+            player["hand"].append(card)
+        for card in cards:
+            if card and card not in keep:
+                deck.append(card)
+        return "skip"
+    return False
+
+
+def rose_doolan(player, event, **_):
+    """Has +1 range."""
+    if event == "start":
+        player["range_bonus"] = player.get("range_bonus", 0) + 1
+
+
+def black_jack(player, event, deck=None, discard=None, **_):
+    """If lucky, draws an extra card."""
+    if event == "draw_phase" and deck is not None:
+        # draw two normal cards first
+        for _ in range(2):
+            card = draw_card(deck, discard)
+            if card:
+                player["hand"].append(card)
+        if random.random() < 0.5:
+            card = draw_card(deck, discard)
+            if card:
+                player["hand"].append(card)
+        return "skip"
+    return False
+
+
 CHARACTER_PERKS = {
-    "Bart Cassidy": lambda p, e: p.update({"hp": p["hp"] + 1}) if e == "damaged" and p["hp"] < 4 else None,
-    "Calamity Janet": lambda p, e: p.update({"can_use_missed_as_bang": True}) if e == "start" else None,
-    "Jesse Jones": lambda p, e: None,
-    "Lucky Duke": lambda p, e: None,
-    "Paul Regret": lambda p, e: p.update({"dodge_bonus": 1}) if e == "start" else None,
-    "Sid Ketchum": lambda p, e: None,
-    "Slab the Killer": lambda p, e: None,
-    "Suzy Lafayette": lambda p, e: None,
-    "Willy the Kid": lambda p, e: p.update({"bonus_shot": 1}) if e == "start" else None,
-    "El Gringo": lambda p, e: None,
-    "Pedro Ramirez": lambda p, e: None,
-    "Kit Carlson": lambda p, e: None,
-    "Rose Doolan": lambda p, e: p.update({"range_bonus": 1}) if e == "start" else None,
-    "Black Jack": lambda p, e: None
+    "Bart Cassidy": bart_cassidy,
+    "Calamity Janet": calamity_janet,
+    "Jesse Jones": jesse_jones,
+    "Lucky Duke": lucky_duke,
+    "Paul Regret": paul_regret,
+    "Sid Ketchum": sid_ketchum,
+    "Slab the Killer": slab_the_killer,
+    "Suzy Lafayette": suzy_lafayette,
+    "Willy the Kid": willy_the_kid,
+    "El Gringo": el_gringo,
+    "Pedro Ramirez": pedro_ramirez,
+    "Kit Carlson": kit_carlson,
+    "Rose Doolan": rose_doolan,
+    "Black Jack": black_jack,
 }
 
 CHARACTERS = list(CHARACTER_PERKS.keys())

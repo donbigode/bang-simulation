@@ -15,14 +15,79 @@ def get_roles(players_count):
     """Return a shuffled list of roles for the game."""
     if players_count < 3:
         raise ValueError("O jogo requer no mínimo 3 jogadores.")
+    if players_count > 7:
+        raise ValueError("O jogo suporta no máximo 7 jogadores.")
     roles = ["Sheriff"] + ["Outlaw"] * (players_count - 2) + ["Renegade"]
     random.shuffle(roles)
     return roles
 
-def simulate_game(players_count=4, characters=None, rounds=500):
+
+def generate_setup(fixed_character, fixed_role, players_count):
+    """Gera personagens e funcoes com um personagem fixo em determinada funcao."""
+    remaining_roles = ["Sheriff"] + ["Outlaw"] * (players_count - 2) + ["Renegade"]
+    remaining_roles.remove(fixed_role)
+    random.shuffle(remaining_roles)
+    roles = [fixed_role] + remaining_roles
+
+    remaining_characters = [c for c in CHARACTERS if c != fixed_character]
+    characters = [fixed_character] + random.sample(remaining_characters, players_count - 1)
+    return characters, roles
+
+
+def compute_probability_matrix(players_count=4, games_per_combo=50):
+    """Executa simulacoes em paralelo para gerar matriz de vitorias e derrotas."""
+    import threading
+
+    outcomes = {
+        (char, role): {"wins": 0, "losses": 0}
+        for char in CHARACTERS
+        for role in ["Sheriff", "Outlaw", "Renegade"]
+    }
+    lock = threading.Lock()
+
+    def worker(character, role):
+        wins = 0
+        for _ in range(games_per_combo):
+            chars, roles = generate_setup(character, role, players_count)
+            result, players = simulate_game(players_count, chars, roles=roles)
+            target_team = role if role != "Outlaw" else "Outlaws"
+            if result == target_team:
+                wins += 1
+        with lock:
+            outcomes[(character, role)]["wins"] += wins
+            outcomes[(character, role)]["losses"] += games_per_combo - wins
+
+    threads = []
+    for character in CHARACTERS:
+        for role in ["Sheriff", "Outlaw", "Renegade"]:
+            t = threading.Thread(target=worker, args=(character, role))
+            t.start()
+            threads.append(t)
+
+    for t in threads:
+        t.join()
+
+    matrix_rows = []
+    for (char, role), data in outcomes.items():
+        total = data["wins"] + data["losses"]
+        win_rate = data["wins"] / total * 100 if total else 0
+        loss_rate = data["losses"] / total * 100 if total else 0
+        matrix_rows.append({
+            "Character": char,
+            "Role": role,
+            "Win %": win_rate,
+            "Loss %": loss_rate,
+        })
+
+    df = pd.DataFrame(matrix_rows)
+    return df.sort_values(["Character", "Role"]).reset_index(drop=True)
+
+def simulate_game(players_count=4, characters=None, rounds=500, roles=None):
     """Simula uma partida e retorna o time vencedor e os jogadores."""
 
-    roles = get_roles(players_count)
+    roles = roles if roles is not None else get_roles(players_count)
+    if len(roles) != players_count:
+        raise ValueError("Numero de funcoes diferente do numero de jogadores.")
 
     if characters is not None:
         if len(characters) != players_count:
@@ -35,11 +100,13 @@ def simulate_game(players_count=4, characters=None, rounds=500):
 
     players = []
     for i in range(players_count):
+        base_hp = 5 if roles[i] == "Sheriff" else 4
         p = {
             "id": i,
             "role": roles[i],
             "character": characters[i],
-            "hp": 5 if roles[i] == "Sheriff" else 4,
+            "hp": base_hp,
+            "max_hp": base_hp,
             "alive": True,
             "hand": [],
             "weapon": "BASIC",
@@ -64,19 +131,41 @@ def simulate_game(players_count=4, characters=None, rounds=500):
             if not player["alive"]:
                 continue
 
+            # habilidades no inicio do turno
+            CHARACTER_PERKS[player["character"]](player, "turn_start", discard=discard)
+
             # Dynamite
             if dynamite_owner == player:
                 if random.random() < DYNAMITE_EXPLOSION_PROB:
-                    player["hp"] -= 3
-                    if player["hp"] <= 0:
-                        player["alive"] = False
+                    for _ in range(3):
+                        player["hp"] -= 1
+                        CHARACTER_PERKS[player["character"]](player, "damaged", deck=deck, discard=discard)
+                        if player["hp"] <= 0:
+                            player["alive"] = False
+                            break
                     dynamite_owner = None
 
             # Compra
-            for _ in range(2):
-                card = draw_card(deck, discard)
-                if card:
-                    player["hand"].append(card)
+            handled = CHARACTER_PERKS[player["character"]](
+                player,
+                "draw_phase",
+                players=players,
+                deck=deck,
+                discard=discard,
+            )
+            draw_cards = 2
+            if handled:
+                if handled == "skip":
+                    draw_cards = 0
+                else:
+                    draw_cards -= 1
+            for _ in range(draw_cards):
+                if player["character"] == "Lucky Duke":
+                    CHARACTER_PERKS[player["character"]](player, "draw", deck=deck, discard=discard)
+                else:
+                    card = draw_card(deck, discard)
+                    if card:
+                        player["hand"].append(card)
 
             # Equipamento
             for card in player["hand"][:]:
@@ -101,25 +190,54 @@ def simulate_game(players_count=4, characters=None, rounds=500):
 
             # Ataques
             shots = 2 if WEAPON_RANGES.get(player["weapon"], {}).get("multi_shot") else 1
+            if player.get("unlimited_bang"):
+                shots = player["hand"].count("BANG")
+                if player.get("can_use_missed_as_bang"):
+                    shots += player["hand"].count("MISSED")
             for _ in range(shots):
-                if "BANG" not in player["hand"]:
+                if "BANG" in player["hand"]:
+                    use_card = "BANG"
+                elif player.get("can_use_missed_as_bang") and "MISSED" in player["hand"]:
+                    use_card = "MISSED"
+                else:
                     break
+
                 target = select_target(player, players)
                 if not target:
                     continue
-                player["hand"].remove("BANG")
-                discard.append("BANG")
-                if "MISSED" in target["hand"]:
-                    target["hand"].remove("MISSED")
-                    discard.append("MISSED")
-                else:
+                player["hand"].remove(use_card)
+                discard.append(use_card)
+
+                misses_needed = 2 if player["character"] == "Slab the Killer" else 1
+                used_misses = 0
+                while used_misses < misses_needed:
+                    if "MISSED" in target["hand"]:
+                        target["hand"].remove("MISSED")
+                        discard.append("MISSED")
+                        used_misses += 1
+                    elif target.get("can_use_bang_as_missed") and "BANG" in target["hand"]:
+                        target["hand"].remove("BANG")
+                        discard.append("BANG")
+                        used_misses += 1
+                    else:
+                        break
+
+                if used_misses < misses_needed:
                     target["hp"] -= 1
+                    if target["character"] == "Bart Cassidy":
+                        CHARACTER_PERKS[target["character"]](target, "damaged", deck=deck, discard=discard)
+                    if target["character"] == "El Gringo":
+                        CHARACTER_PERKS[target["character"]](target, "damaged_by_player", attacker=player)
                     if target["hp"] <= 0:
                         target["alive"] = False
 
             # Limite de cartas
             while len(player["hand"]) > player["hp"]:
                 discard.append(player["hand"].pop())
+
+            CHARACTER_PERKS[player["character"]](
+                player, "turn_end", deck=deck, discard=discard
+            )
 
         # Verificação de vitória
         sheriff_alive = any(p["role"] == "Sheriff" and p["alive"] for p in players)
@@ -137,7 +255,9 @@ def simulate_game(players_count=4, characters=None, rounds=500):
 
 if __name__ == "__main__":
     total_games = 5000
-    players_count = int(input("Numero de jogadores (3-16): "))
+    players_count = int(input("Numero de jogadores (3-7): "))
+    if not 3 <= players_count <= 7:
+        raise ValueError("Numero de jogadores deve estar entre 3 e 7.")
     print("Personagens disponiveis:")
     print(", ".join(CHARACTERS))
     chars_input = input(
@@ -182,3 +302,7 @@ if __name__ == "__main__":
         print(df_details.sort_values(["Role", "Character"]).to_string(index=False))
     else:
         print("Nenhum dado disponivel")
+
+    print("\nMatriz de probabilidades (personagem x funcao):")
+    matrix = compute_probability_matrix(players_count, games_per_combo=50)
+    print(matrix.to_string(index=False))
