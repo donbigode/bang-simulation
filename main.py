@@ -1,4 +1,9 @@
 import random
+
+# Defina uma semente para tornar a simulacao reproduzivel
+# A semente fixa facilita os testes e depuracao.
+RANDOM_SEED = 42
+random.seed(RANDOM_SEED)
 import pandas as pd
 from utils import build_deck, draw_card, WEAPON_RANGES, CHARACTER_PERKS, CHARACTERS
 from targeting import select_target
