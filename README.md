@@ -64,3 +64,15 @@ Bart Cassidy, Calamity Janet, Jesse Jones, Lucky Duke, Paul Regret, Sid Ketchum,
 Slab the Killer, Suzy Lafayette, Willy the Kid, El Gringo, Pedro Ramirez,
 Kit Carlson, Rose Doolan, Black Jack
 ```
+
+### Role distribution
+
+Roles are assigned according to the number of players:
+
+| Players | Roles |
+|---------|------------------------------------------------|
+| 3       | Sheriff, Outlaw, Renegade |
+| 4       | Sheriff, 2 Outlaws, Renegade |
+| 5       | Sheriff, Deputy, 2 Outlaws, Renegade |
+| 6       | Sheriff, Deputy, 3 Outlaws, Renegade |
+| 7       | Sheriff, 2 Deputies, 3 Outlaws, Renegade |

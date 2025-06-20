@@ -25,3 +25,13 @@ def test_get_roles_rejects_more_than_seven_players():
     except ValueError:
         pass
 
+
+def test_get_roles_distribution():
+    from collections import Counter
+
+    assert Counter(get_roles(3)) == Counter({"Sheriff": 1, "Outlaw": 1, "Renegade": 1})
+    assert Counter(get_roles(4)) == Counter({"Sheriff": 1, "Outlaw": 2, "Renegade": 1})
+    assert Counter(get_roles(5)) == Counter({"Sheriff": 1, "Outlaw": 2, "Renegade": 1, "Deputy": 1})
+    assert Counter(get_roles(6)) == Counter({"Sheriff": 1, "Outlaw": 3, "Renegade": 1, "Deputy": 1})
+    assert Counter(get_roles(7)) == Counter({"Sheriff": 1, "Outlaw": 3, "Renegade": 1, "Deputy": 2})
+

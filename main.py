@@ -15,23 +15,32 @@ from targeting import select_target
 DYNAMITE_EXPLOSION_PROB = 8 / 52
 
 
+ROLE_DISTRIBUTION = {
+    3: {"Sheriff": 1, "Outlaw": 1, "Renegade": 1},
+    4: {"Sheriff": 1, "Outlaw": 2, "Renegade": 1},
+    5: {"Sheriff": 1, "Outlaw": 2, "Renegade": 1, "Deputy": 1},
+    6: {"Sheriff": 1, "Outlaw": 3, "Renegade": 1, "Deputy": 1},
+    7: {"Sheriff": 1, "Outlaw": 3, "Renegade": 1, "Deputy": 2},
+}
+
+
 def get_roles(players_count):
-    """Return a shuffled list of roles for the game."""
-    if players_count < 3:
-        raise ValueError("O jogo requer no mínimo 3 jogadores.")
-    if players_count > 7:
-        raise ValueError("O jogo suporta no máximo 7 jogadores.")
-    roles = ["Sheriff"] + ["Outlaw"] * (players_count - 2) + ["Renegade"]
+    """Return a shuffled list of roles for the game based on player count."""
+    if players_count not in ROLE_DISTRIBUTION:
+        raise ValueError("Numero de jogadores deve estar entre 3 e 7.")
+    roles = []
+    for role, count in ROLE_DISTRIBUTION[players_count].items():
+        roles.extend([role] * count)
     random.shuffle(roles)
     return roles
 
 
 def generate_setup(fixed_character, fixed_role, players_count):
     """Gera personagens e funcoes com um personagem fixo em determinada funcao."""
-    remaining_roles = ["Sheriff"] + ["Outlaw"] * (players_count - 2) + ["Renegade"]
-    remaining_roles.remove(fixed_role)
-    random.shuffle(remaining_roles)
-    roles = [fixed_role] + remaining_roles
+    roles = get_roles(players_count)
+    roles.remove(fixed_role)
+    random.shuffle(roles)
+    roles = [fixed_role] + roles
 
     remaining_characters = [c for c in CHARACTERS if c != fixed_character]
     characters = [fixed_character] + random.sample(remaining_characters, players_count - 1)
@@ -43,10 +52,11 @@ def compute_probability_matrix(players_count=4, games_per_combo=50):
     import threading
     import pandas as pd
 
+    roles_list = ["Sheriff", "Deputy", "Outlaw", "Renegade"]
     outcomes = {
         (char, role): {"wins": 0, "losses": 0}
         for char in CHARACTERS
-        for role in ["Sheriff", "Outlaw", "Renegade"]
+        for role in roles_list
     }
     lock = threading.Lock()
 
@@ -55,7 +65,12 @@ def compute_probability_matrix(players_count=4, games_per_combo=50):
         for _ in range(games_per_combo):
             chars, roles = generate_setup(character, role, players_count)
             result, players = simulate_game(players_count, chars, roles=roles)
-            target_team = role if role != "Outlaw" else "Outlaws"
+            if role == "Outlaw":
+                target_team = "Outlaws"
+            elif role == "Deputy":
+                target_team = "Sheriff"
+            else:
+                target_team = role
             if result == target_team:
                 wins += 1
         with lock:
@@ -64,7 +79,7 @@ def compute_probability_matrix(players_count=4, games_per_combo=50):
 
     threads = []
     for character in CHARACTERS:
-        for role in ["Sheriff", "Outlaw", "Renegade"]:
+        for role in roles_list:
             t = threading.Thread(target=worker, args=(character, role))
             t.start()
             threads.append(t)
@@ -110,7 +125,7 @@ def compute_statistics(players_count=4, games=500):
             for p in players
             if p["alive"] and (
                 (winner == "Outlaws" and p["role"] == "Outlaw")
-                or (winner == "Sheriff" and p["role"] == "Sheriff")
+                or (winner == "Sheriff" and p["role"] in ["Sheriff", "Deputy"])
                 or (winner == "Renegade" and p["role"] == "Renegade")
             )
         ]
@@ -131,7 +146,7 @@ def compute_statistics(players_count=4, games=500):
             for p in players:
                 if winner == "Outlaws" and p["role"] != "Outlaw":
                     continue
-                if winner == "Sheriff" and p["role"] != "Sheriff":
+                if winner == "Sheriff" and p["role"] not in ["Sheriff", "Deputy"]:
                     continue
                 if winner == "Renegade" and p["role"] != "Renegade":
                     continue
@@ -234,7 +249,11 @@ def simulate_game(players_count=4, characters=None, rounds=500, roles=None, retu
 
     for round_ in range(rounds):
         outlaws_alive_cnt = sum(1 for p in players if p["alive"] and p["role"] == "Outlaw")
-        law_alive_cnt = sum(1 for p in players if p["alive"] and p["role"] == "Sheriff")
+        law_alive_cnt = sum(
+            1
+            for p in players
+            if p["alive"] and p["role"] in ["Sheriff", "Deputy"]
+        )
 
         if outlaws_alive_cnt == law_alive_cnt:
             if not in_equilibrium:
@@ -513,7 +532,7 @@ if __name__ == "__main__":
             for p in players:
                 if winner == "Outlaws" and p["role"] != "Outlaw":
                     continue
-                if winner == "Sheriff" and p["role"] != "Sheriff":
+                if winner == "Sheriff" and p["role"] not in ["Sheriff", "Deputy"]:
                     continue
                 if winner == "Renegade" and p["role"] != "Renegade":
                     continue
