@@ -4,7 +4,6 @@ import random
 # A semente fixa facilita os testes e depuracao.
 RANDOM_SEED = 42
 random.seed(RANDOM_SEED)
-import pandas as pd
 from utils import build_deck, draw_card, WEAPON_RANGES, CHARACTER_PERKS, CHARACTERS
 from targeting import select_target
 
@@ -37,6 +36,7 @@ def generate_setup(fixed_character, fixed_role, players_count):
 def compute_probability_matrix(players_count=4, games_per_combo=50):
     """Executa simulacoes em paralelo para gerar matriz de vitorias e derrotas."""
     import threading
+    import pandas as pd
 
     outcomes = {
         (char, role): {"wins": 0, "losses": 0}
@@ -254,6 +254,7 @@ def simulate_game(players_count=4, characters=None, rounds=500, roles=None):
     return "Draw", players
 
 if __name__ == "__main__":
+    import pandas as pd
     total_games = 5000
     players_count = int(input("Numero de jogadores (3-7): "))
     if not 3 <= players_count <= 7:
