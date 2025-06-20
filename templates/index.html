@@ -12,6 +12,7 @@
         th, td { border: 1px solid #ccc; padding: 0.25em 0.5em; text-align: center; }
         #layout { display: flex; gap: 2em; margin-top: 2em; }
         #log-container { max-height: 400px; overflow-y: auto; }
+        #log-table td { text-align: left; }
     </style>
 </head>
 <body>
@@ -97,12 +98,9 @@
         const query = new URLSearchParams({players});
         if (selected) query.append('characters', selected);
 
-        const simRes = await fetch('/simulate?' + query.toString(), {cache: 'no-store'});
-        const simData = await simRes.json();
-        renderLog(simData.log);
-
-        const statsRes = await fetch('/statistics?' + new URLSearchParams({players}).toString(), {cache: 'no-store'});
+        const statsRes = await fetch('/statistics?' + query.toString(), {cache: 'no-store'});
         const statsData = await statsRes.json();
+        renderLog(statsData.log);
         renderTable('matrix-table', statsData.probability_matrix);
         renderTable('details-table', statsData.role_character_stats);
         renderTable('role-table', statsData.role_stats);
