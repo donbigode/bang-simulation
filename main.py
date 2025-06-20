@@ -84,14 +84,18 @@ def compute_probability_matrix(players_count=4, games_per_combo=50):
 
 
 def compute_statistics(players_count=4, games=500):
-    """Executa multiplas partidas para gerar estatisticas agregadas."""
+    """Executa multiplas partidas e retorna estatisticas e log completo."""
     import pandas as pd
 
     results_roles = {"Sheriff": 0, "Outlaws": 0, "Renegade": 0, "Draw": 0}
     results_details = {}
+    logs = []
 
-    for _ in range(games):
-        winner, players = simulate_game(players_count)
+    for i in range(games):
+        winner, players, log = simulate_game(
+            players_count, return_log=True, game_number=i + 1
+        )
+        logs.extend(log)
         results_roles[winner] += 1
 
         if winner != "Draw":
@@ -131,6 +135,7 @@ def compute_statistics(players_count=4, games=500):
         "role_stats": df_roles.to_dict(orient="records"),
         "role_character_stats": df_details.to_dict(orient="records") if not df_details.empty else [],
         "probability_matrix": prob.to_dict(orient="records"),
+        "log": logs,
     }
 
 def simulate_game(players_count=4, characters=None, rounds=500, roles=None, return_log=False, game_number=1):
