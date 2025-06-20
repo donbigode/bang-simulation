@@ -1,9 +1,14 @@
 import random
+import os
 
-# Defina uma semente para tornar a simulacao reproduzivel
-# A semente fixa facilita os testes e depuracao.
-RANDOM_SEED = 42
-random.seed(RANDOM_SEED)
+# Permite definir uma semente via variavel de ambiente.
+# Se nenhuma for informada, usa a aleatoriedade padrao do Python.
+RANDOM_SEED = os.getenv("BANG_SEED")
+if RANDOM_SEED is not None:
+    try:
+        random.seed(int(RANDOM_SEED))
+    except ValueError:
+        random.seed(RANDOM_SEED)
 from utils import build_deck, draw_card, WEAPON_RANGES, CHARACTER_PERKS, CHARACTERS
 from targeting import select_target
 
