@@ -90,6 +90,7 @@ def compute_statistics(players_count=4, games=500):
     results_roles = {"Sheriff": 0, "Outlaws": 0, "Renegade": 0, "Draw": 0}
     results_details = {}
     logs = []
+    game_results = []
 
     for i in range(games):
         winner, players, log = simulate_game(
@@ -97,6 +98,21 @@ def compute_statistics(players_count=4, games=500):
         )
         logs.extend(log)
         results_roles[winner] += 1
+
+        winners_chars = [
+            p["character"]
+            for p in players
+            if p["alive"] and (
+                (winner == "Outlaws" and p["role"] == "Outlaw")
+                or (winner == "Sheriff" and p["role"] == "Sheriff")
+                or (winner == "Renegade" and p["role"] == "Renegade")
+            )
+        ]
+        game_results.append({
+            "game": i + 1,
+            "winner_role": winner,
+            "winner_characters": winners_chars,
+        })
 
         if winner != "Draw":
             for p in players:
@@ -136,6 +152,7 @@ def compute_statistics(players_count=4, games=500):
         "role_character_stats": df_details.to_dict(orient="records") if not df_details.empty else [],
         "probability_matrix": prob.to_dict(orient="records"),
         "log": logs,
+        "game_results": game_results,
     }
 
 def simulate_game(players_count=4, characters=None, rounds=500, roles=None, return_log=False, game_number=1):
@@ -178,6 +195,15 @@ def simulate_game(players_count=4, characters=None, rounds=500, roles=None, retu
         CHARACTER_PERKS[characters[i]](p, "start")
         players.append(p)
 
+    if return_log:
+        log.append({
+            "game": game_number,
+            "action": "setup",
+            "players": [
+                {"character": p["character"], "role": p["role"]} for p in players
+            ],
+        })
+
     deck = build_deck()
     discard = []
     dynamite_owner = None
@@ -193,9 +219,14 @@ def simulate_game(players_count=4, characters=None, rounds=500, roles=None, retu
             if not player["alive"]:
                 continue
             if return_log:
-                log.append(
-                    f"Partida {game_number} - Rodada {round_ + 1} - turno de {player['character']}"
-                )
+                log.append({
+                    "game": game_number,
+                    "round": round_ + 1,
+                    "player": player["character"],
+                    "role": player["role"],
+                    "action": "turn_start",
+                    "hand": player["hand"].copy(),
+                })
 
             # habilidades no inicio do turno
             CHARACTER_PERKS[player["character"]](player, "turn_start", discard=discard)
@@ -232,6 +263,15 @@ def simulate_game(players_count=4, characters=None, rounds=500, roles=None, retu
                     card = draw_card(deck, discard)
                     if card:
                         player["hand"].append(card)
+            if return_log:
+                log.append({
+                    "game": game_number,
+                    "round": round_ + 1,
+                    "player": player["character"],
+                    "role": player["role"],
+                    "action": "draw",
+                    "hand": player["hand"].copy(),
+                })
 
             # Equipamento
             for card in player["hand"][:]:
@@ -239,20 +279,60 @@ def simulate_game(players_count=4, characters=None, rounds=500, roles=None, retu
                     player["weapon"] = card
                     player["hand"].remove(card)
                     discard.append(card)
+                    if return_log:
+                        log.append({
+                            "game": game_number,
+                            "round": round_ + 1,
+                            "player": player["character"],
+                            "role": player["role"],
+                            "action": "equip",
+                            "card": card,
+                            "hand": player["hand"].copy(),
+                        })
                 elif card == "SCOPE":
                     player["range_bonus"] += 1
                     player["hand"].remove(card)
                     discard.append(card)
+                    if return_log:
+                        log.append({
+                            "game": game_number,
+                            "round": round_ + 1,
+                            "player": player["character"],
+                            "role": player["role"],
+                            "action": "equip",
+                            "card": card,
+                            "hand": player["hand"].copy(),
+                        })
                 elif card == "MUSTANG":
                     player["dodge_bonus"] += 1
                     player["hand"].remove(card)
                     discard.append(card)
+                    if return_log:
+                        log.append({
+                            "game": game_number,
+                            "round": round_ + 1,
+                            "player": player["character"],
+                            "role": player["role"],
+                            "action": "equip",
+                            "card": card,
+                            "hand": player["hand"].copy(),
+                        })
 
             # Beer
             if player["hp"] <= 2 and "BEER" in player["hand"]:
                 player["hp"] += 1
                 player["hand"].remove("BEER")
                 discard.append("BEER")
+                if return_log:
+                    log.append({
+                        "game": game_number,
+                        "round": round_ + 1,
+                        "player": player["character"],
+                        "role": player["role"],
+                        "action": "beer",
+                        "hand": player["hand"].copy(),
+                        "new_hp": player["hp"],
+                    })
 
             # Ataques
             shots = 2 if WEAPON_RANGES.get(player["weapon"], {}).get("multi_shot") else 1
@@ -272,9 +352,16 @@ def simulate_game(players_count=4, characters=None, rounds=500, roles=None, retu
                 if not target:
                     continue
                 if return_log:
-                    log.append(
-                        f"Partida {game_number} - Rodada {round_ + 1} - {player['character']} atacou {target['character']}"
-                    )
+                    log.append({
+                        "game": game_number,
+                        "round": round_ + 1,
+                        "player": player["character"],
+                        "role": player["role"],
+                        "action": "attack",
+                        "card": use_card,
+                        "target": target["character"],
+                        "hand": player["hand"].copy(),
+                    })
                 player["hand"].remove(use_card)
                 discard.append(use_card)
 
@@ -295,9 +382,15 @@ def simulate_game(players_count=4, characters=None, rounds=500, roles=None, retu
                 if used_misses < misses_needed:
                     target["hp"] -= 1
                     if return_log:
-                        log.append(
-                            f"Partida {game_number} - Rodada {round_ + 1} - {target['character']} perdeu 1 de vida (hp={target['hp']})"
-                        )
+                        log.append({
+                            "game": game_number,
+                            "round": round_ + 1,
+                            "player": target["character"],
+                            "role": target["role"],
+                            "action": "damaged",
+                            "new_hp": target["hp"],
+                            "hand": target["hand"].copy(),
+                        })
                     if target["character"] == "Bart Cassidy":
                         CHARACTER_PERKS[target["character"]](target, "damaged", deck=deck, discard=discard)
                     if target["character"] == "El Gringo":
@@ -305,9 +398,13 @@ def simulate_game(players_count=4, characters=None, rounds=500, roles=None, retu
                     if target["hp"] <= 0:
                         target["alive"] = False
                         if return_log:
-                            log.append(
-                                f"Partida {game_number} - Rodada {round_ + 1} - {target['character']} morreu"
-                            )
+                            log.append({
+                                "game": game_number,
+                                "round": round_ + 1,
+                                "player": target["character"],
+                                "role": target["role"],
+                                "action": "death",
+                            })
 
             # Limite de cartas
             while len(player["hand"]) > player["hp"]:
@@ -316,6 +413,15 @@ def simulate_game(players_count=4, characters=None, rounds=500, roles=None, retu
             CHARACTER_PERKS[player["character"]](
                 player, "turn_end", deck=deck, discard=discard
             )
+            if return_log:
+                log.append({
+                    "game": game_number,
+                    "round": round_ + 1,
+                    "player": player["character"],
+                    "role": player["role"],
+                    "action": "turn_end",
+                    "hand": player["hand"].copy(),
+                })
 
         # Verificação de vitória
         sheriff_alive = any(p["role"] == "Sheriff" and p["alive"] for p in players)
@@ -332,12 +438,16 @@ def simulate_game(players_count=4, characters=None, rounds=500, roles=None, retu
 
         if winner:
             if return_log:
-                log.append(f"Partida {game_number} - Vencedor: {winner}")
+                log.append({
+                    "game": game_number,
+                    "action": "game_end",
+                    "winner": winner,
+                })
                 return winner, players, log
             return winner, players
 
     if return_log:
-        log.append(f"Partida {game_number} - Vencedor: Draw")
+        log.append({"game": game_number, "action": "game_end", "winner": "Draw"})
         return "Draw", players, log
 
     return "Draw", players
