@@ -1,13 +1,13 @@
 from flask import Flask, request, jsonify, render_template
 from main import simulate_game, compute_probability_matrix, compute_statistics
-from utils import CHARACTERS
+from utils import CHARACTERS, CHARACTER_ABILITY_DESCRIPTIONS
 
 app = Flask(__name__)
 
 @app.route('/')
 def index():
     """Render a simple HTML front-end for the simulation."""
-    return render_template('index.html', characters=CHARACTERS)
+    return render_template('index.html', characters=CHARACTERS, abilities=CHARACTER_ABILITY_DESCRIPTIONS)
 
 @app.route('/simulate')
 def simulate_route():
