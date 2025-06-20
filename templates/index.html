@@ -11,8 +11,9 @@
         table { border-collapse: collapse; margin-bottom: 1em; }
         th, td { border: 1px solid #ccc; padding: 0.25em 0.5em; text-align: center; }
         #layout { display: flex; gap: 2em; margin-top: 2em; }
-        #log-container { max-height: 400px; overflow-y: auto; }
+        #log-container { max-height: 400px; overflow-y: auto; width: 100%; }
         #log-table td { text-align: left; }
+        canvas { max-width: 100%; }
     </style>
 </head>
 <body>
@@ -44,10 +45,15 @@
     </div>
     <div id="log-container">
         <h3>Log de Ações</h3>
+        <label>Filtrar Partida:
+            <select id="game-filter"></select>
+        </label>
         <table id="log-table"></table>
+        <canvas id="winner-chart"></canvas>
     </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
     async function renderTable(id, data) {
         const table = document.getElementById(id);
@@ -71,13 +77,58 @@
     function renderLog(log) {
         const table = document.getElementById('log-table');
         table.innerHTML = '';
-        if (!log) return;
-        log.forEach(entry => {
-            const tr = document.createElement('tr');
-            const td = document.createElement('td');
-            td.textContent = entry;
-            tr.appendChild(td);
-            table.appendChild(tr);
+        if (!log || !log.length) return;
+
+        const games = [...new Set(log.map(e => e.game))];
+        const filter = document.getElementById('game-filter');
+        filter.innerHTML = '<option value="all">Todas</option>' + games.map(g => `<option value="${g}">${g}</option>`).join('');
+
+        const cols = ['game','round','player','role','action','card','target','hand','new_hp','winner'];
+        const thead = document.createElement('thead');
+        const headRow = document.createElement('tr');
+        cols.forEach(c => { const th = document.createElement('th'); th.textContent = c; headRow.appendChild(th); });
+        thead.appendChild(headRow);
+        const tbody = document.createElement('tbody');
+
+        function populate(filterGame) {
+            tbody.innerHTML = '';
+            log.filter(e => filterGame === 'all' || e.game == filterGame).forEach(entry => {
+                const tr = document.createElement('tr');
+                cols.forEach(c => {
+                    const td = document.createElement('td');
+                    let val = entry[c];
+                    if (Array.isArray(val)) val = val.join(',');
+                    td.textContent = val !== undefined ? val : '';
+                    tr.appendChild(td);
+                });
+                tbody.appendChild(tr);
+            });
+        }
+
+        populate('all');
+        filter.onchange = () => populate(filter.value);
+
+        table.appendChild(thead);
+        table.appendChild(tbody);
+    }
+
+    function renderChart(data) {
+        const ctx = document.getElementById('winner-chart');
+        if (!ctx) return;
+        const counts = {};
+        data.forEach(gr => {
+            gr.winner_characters.forEach(ch => {
+                const key = ch + ' (' + gr.winner_role + ')';
+                counts[key] = (counts[key] || 0) + 1;
+            });
+        });
+        const labels = Object.keys(counts);
+        const values = labels.map(l => counts[l]);
+        if (window.winnerChart) window.winnerChart.destroy();
+        window.winnerChart = new Chart(ctx, {
+            type: 'bar',
+            data: { labels, datasets: [{ label: 'Vitórias', data: values, backgroundColor: '#4e79a7' }] },
+            options: { plugins: { legend: { display: false } } }
         });
     }
 
@@ -104,6 +155,7 @@
         renderTable('matrix-table', statsData.probability_matrix);
         renderTable('details-table', statsData.role_character_stats);
         renderTable('role-table', statsData.role_stats);
+        renderChart(statsData.game_results);
     });
 </script>
 </body>
