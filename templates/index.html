@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Bang! Simulação</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 2em; }
+        label { display: block; margin-top: 1em; }
+        select { width: 200px; height: 150px; }
+        button { margin-top: 1em; padding: 0.5em 1em; }
+        pre { background: #f0f0f0; padding: 1em; }
+    </style>
+</head>
+<body>
+<h1>Simulação do Bang!</h1>
+<form id="simulate-form">
+    <label>Número de jogadores:
+        <input type="number" id="players" min="3" max="7" value="4" required>
+    </label>
+    <label>Personagens (selecione um ou mais):
+        <select id="characters" multiple>
+            {% for char in characters %}
+            <option value="{{ char }}">{{ char }}</option>
+            {% endfor %}
+        </select>
+    </label>
+    <button type="submit">Simular</button>
+</form>
+<pre id="result"></pre>
+<script>
+    document.getElementById('simulate-form').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        const players = document.getElementById('players').value;
+        const selected = Array.from(document.getElementById('characters').selectedOptions)
+            .map(o => o.value).join(',');
+        const query = new URLSearchParams({players: players});
+        if (selected) query.append('characters', selected);
+        const response = await fetch('/simulate?' + query.toString());
+        const data = await response.json();
+        document.getElementById('result').textContent = JSON.stringify(data, null, 2);
+    });
+</script>
+</body>
+</html>
